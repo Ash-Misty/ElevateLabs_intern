@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}FraudGuard{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+</head>
+<body>
+  <div class="aurora"></div>
+
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('dashboard') }}">
+      <span class="brand-mark">🛡️</span>
+      <span class="brand-text">Fraud<em>Guard</em></span>
+    </a>
+    <nav class="nav">
+      <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint == 'dashboard' }}">Dashboard</a>
+      <a href="{{ url_for('score') }}" class="{{ 'active' if request.endpoint == 'score' }}">Score a Transaction</a>
+      <a href="{{ url_for('batch') }}" class="{{ 'active' if request.endpoint == 'batch' }}">Batch Screening</a>
+      <a href="{{ url_for('api_metrics') }}" target="_blank" rel="noopener">API</a>
+    </nav>
+    <span class="version">v{{ app_version }}</span>
+  </header>
+
+  <main class="wrap">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <span>FraudGuard · credit card fraud detection with anomaly detection + XGBoost</span>
+    <span class="dot">·</span>
+    <span>Isolation Forest · Local Outlier Factor · XGBoost · SMOTE</span>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}FraudGuard · {{ code }}{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <h1>{{ code }}</h1>
+  <p>{{ message }}</p>
+</section>
+<div class="card">
+  <h3>Where to go next</h3>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('dashboard') }}">Back to dashboard</a>
+    <a class="btn ghost" href="{{ url_for('score') }}">Score a transaction</a>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}FraudGuard · Score a transaction{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <h1>🔎 Score a transaction</h1>
+  <p>Enter the 30 model features for one transaction. V1–V28 are the PCA components of the original
+     anonymised features, so they cluster around zero. The verdict shows which inputs drove it.</p>
+</section>
+
+<form method="post" autocomplete="off">
+  <div class="grid split">
+    <div>
+      <div class="card">
+        <h3>Quick presets</h3>
+        <div class="presets">
+          <button type="button" class="btn ghost sm" data-preset="blank">Model average</button>
+          <button type="button" class="btn ghost sm" data-preset="grocery">Low-value grocery</button>
+          <button type="button" class="btn ghost sm" data-preset="night">Late-night high value</button>
+          <button type="button" class="btn ghost sm" data-preset="testing">Card testing</button>
+          <button type="button" class="btn ghost sm" data-preset="atm">ATM withdrawal</button>
+        </div>
+        <p class="small" style="margin-top:0.8rem">Presets load plausible feature values so you can see
+           how the score moves without hand-typing 30 numbers.</p>
+      </div>
+
+      <div class="card" style="margin-top:1.1rem">
+        <h3>Transaction amount &amp; time</h3>
+        <div class="field-grid" style="grid-template-columns:repeat(2,1fr)">
+          <div class="field">
+            <label for="Time">Time (seconds into window)</label>
+            <input type="number" id="Time" name="Time" step="60" min="0" max="172800" value="{{ transaction.Time }}">
+          </div>
+          <div class="field">
+            <label for="Amount">Amount</label>
+            <input type="number" id="Amount" name="Amount" step="1" min="0" max="25000" value="{{ transaction.Amount }}">
+          </div>
+        </div>
+        <p class="small" id="timeHint" style="margin-top:0.5rem"></p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Feature vector V1 – V28</h3>
+      <div class="field-grid">
+        {% for name in feature_names if name.startswith('V') %}
+        <div class="field">
+          <label for="{{ name }}">{{ name }}</label>
+          <input type="number" id="{{ name }}" name="{{ name }}" step="0.1" min="-8" max="8" value="{{ '%.2f'|format(transaction[name]) }}">
+        </div>
+        {% endfor %}
+      </div>
+      <div class="actions">
+        <button type="submit" class="btn">⚡ Run fraud check</button>
+        <button type="button" class="btn ghost" onclick="document.querySelectorAll('.field-grid input').forEach(i => i.value = 0); document.getElementById('Time').value = 41280; document.getElementById('Amount').value = 120;">Reset</button>
+      </div>
+    </div>
+  </div>
+</form>
+
+{% if result %}
+<section class="section">
+  <h2>Verdict</h2>
+  <div class="verdict" style="border-left:5px solid {{ result.color }}">
+    <span class="mark">
+      {% if result.verdict == 'Critical' %}🚫{% elif result.verdict == 'High' %}⚠️{% elif result.verdict == 'Medium' %}🔎{% else %}✅{% endif %}
+    </span>
+    <div style="flex:1">
+      <h3 style="color:{{ result.color }}">{{ result.verdict }} risk</h3>
+      <p>{{ result.recommendation }}</p>
+      <div class="meter"><span style="width:{{ (result.risk_score * 100)|round(1) }}%; background:linear-gradient(90deg, {{ result.color }}, {{ result.color }}bb)"></span></div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:1.7rem;font-weight:800" class="num">{{ '%.1f%%'|format(result.risk_score * 100) }}</div>
+      <div class="small muted">risk score</div>
+    </div>
+  </div>
+
+  <div class="grid k5" style="margin-top:1.1rem">
+    <div class="card kpi"><div class="label">Fraud probability</div><div class="value num">{{ '%.2f%%'|format(result.fraud_probability * 100) }}</div><div class="hint">XGBoost output</div></div>
+    <div class="card kpi"><div class="label">Blended score</div><div class="value num">{{ '%.2f%%'|format(result.ensemble_score * 100) }}</div><div class="hint">classifier + LOF</div></div>
+    <div class="card kpi"><div class="label">IF anomaly</div><div class="value num">{{ '%.1f%%'|format(result.anomaly_isolation_forest * 100) }}</div><div class="hint">global percentile</div></div>
+    <div class="card kpi"><div class="label">LOF anomaly</div><div class="value num">{{ '%.1f%%'|format((result.anomaly_local_outlier_factor or 0) * 100) }}</div><div class="hint">local density</div></div>
+    <div class="card kpi"><div class="label">Threshold</div><div class="value num">{{ '%.2f'|format(result.threshold) }}</div><div class="hint">max-F1 operating point</div></div>
+  </div>
+
+  <div class="grid split" style="margin-top:1.1rem">
+    <div class="card">
+      <h3>Why the model reacted this way</h3>
+      <p class="small">Deviation from the legitimate baseline, in standard deviations (σ).
+         Features furthest from typical behaviour dominate the score.</p>
+      <div class="factors" style="margin-top:0.9rem">
+        {% for f in result.contributing_features %}
+        <div class="factor">
+          <span class="name">{{ f.feature }}</span>
+          <span class="bar">
+            <span style="width:{{ ((f.z_score | abs) / 4 * 100)|round(1) }}%;
+                         background:{{ '#ef4444' if f.z_score > 0 else '#8b5cf6' }}"></span>
+          </span>
+          <span class="val">{{ '%+.2f'|format(f.z_score) }}σ · value {{ '%.2f'|format(f.value) }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="card">
+      <h3>Decision trace</h3>
+      <table>
+        <tbody>
+          <tr><td class="muted">XGBoost probability</td><td class="num">{{ '%.4f'|format(result.fraud_probability) }}</td></tr>
+          <tr><td class="muted">Isolation Forest percentile</td><td class="num">{{ '%.4f'|format(result.anomaly_isolation_forest) }}</td></tr>
+          <tr><td class="muted">LOF percentile</td><td class="num">{{ '%.4f'|format(result.anomaly_local_outlier_factor or 0) }}</td></tr>
+          <tr><td class="muted">Blended risk score</td><td class="num">{{ '%.4f'|format(result.risk_score) }}</td></tr>
+          <tr><td class="muted">Operating threshold</td><td class="num">{{ '%.2f'|format(result.threshold) }}</td></tr>
+          <tr><td class="muted">Flagged as fraud</td>
+              <td class="num">{% if result.is_fraud %}<span class="pill flag">YES</span>{% else %}<span class="pill clear">NO</span>{% endif %}</td></tr>
+          <tr><td class="muted">Scored at</td><td class="num">{{ result.scored_at }}</td></tr>
+        </tbody>
+      </table>
+      <div class="actions">
+        <a class="btn ghost sm" href="{{ url_for('score') }}">Score another</a>
+        <a class="btn ghost sm" href="{{ url_for('batch') }}">Screen a CSV instead</a>
+      </div>
+    </div>
+  </div>
+</section>
+{% else %}
+<div class="alert info" style="margin-top:1.4rem">Press <b>Run fraud check</b> to score this transaction.</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const PRESETS = {
+    blank:   { Time: 41280, Amount: 120 },
+    grocery: { Time: 41280, Amount: 18.5,  V14: 0.12, V12: 0.08, V17: -0.05, V10: 0.22 },
+    night:   { Time: 2600,  Amount: 1850,  V14: -1.9, V12: -1.6, V17: -1.8, V10: -1.3, V7: -1.1 },
+    testing: { Time: 900,   Amount: 4.99,  V14: -0.8, V12: -0.6, V17: -0.7, V10: -0.5 },
+    atm:     { Time: 6400,  Amount: 2400,  V14: -1.4, V12: -1.1, V17: -1.3, V10: -1.0, V16: -0.9 }
+  };
+
+  document.querySelectorAll('[data-preset]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const preset = PRESETS[btn.dataset.preset];
+      document.querySelectorAll('.field-grid input, input[name="Time"], input[name="Amount"]').forEach(i => {
+        i.value = preset[i.name] !== undefined ? preset[i.name] : 0;
+      });
+      updateTimeHint();
+    });
+  });
+
+  function updateTimeHint() {
+    const t = parseFloat(document.getElementById('Time').value || 0);
+    const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60);
+    document.getElementById('timeHint').textContent = `${h}h ${m}m into the two-day capture window`;
+  }
+  document.getElementById('Time').addEventListener('input', updateTimeHint);
+  updateTimeHint();
+</script>
+{% endblock %}

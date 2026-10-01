@@ -1,0 +1,1 @@
+web: python app/flask_app.py ${PORT:-5000}

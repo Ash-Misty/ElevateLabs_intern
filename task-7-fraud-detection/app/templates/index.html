@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}FraudGuard · Dashboard{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <h1>🛡️ FraudGuard</h1>
+  <p>Credit card fraud detection that combines supervised gradient boosting with unsupervised
+     anomaly detection, then explains every verdict in plain language.</p>
+  <div class="chips">
+    <span class="chip">XGBoost + SMOTE + scale_pos_weight</span>
+    <span class="chip">Isolation Forest &amp; LOF</span>
+    <span class="chip">{{ '{:,}'.format(dataset.get('rows', 0)) }} transactions</span>
+    <span class="chip">{{ '%.3f%%'|format(dataset.get('fraud_rate', 0) * 100) }} fraud rate</span>
+    <span class="chip">Threshold {{ '%.2f'|format(threshold) }}</span>
+  </div>
+</section>
+
+{% if primary %}
+<div class="grid k5">
+  <div class="card kpi good">
+    <div class="label">ROC-AUC</div>
+    <div class="value num">{{ '%.4f'|format(primary.roc_auc) }}</div>
+    <div class="hint">threshold-free ranking</div>
+  </div>
+  <div class="card kpi good">
+    <div class="label">PR-AUC</div>
+    <div class="value num">{{ '%.4f'|format(primary.pr_auc) }}</div>
+    <div class="hint">{{ '%.0f'|format(primary.pr_auc / dataset.fraud_rate) }}× the no-skill baseline</div>
+  </div>
+  <div class="card kpi warn">
+    <div class="label">Fraud Recall</div>
+    <div class="value num">{{ '%.1f%%'|format(primary.recall * 100) }}</div>
+    <div class="hint">{{ primary.tp }} of {{ primary.tp + primary.fn }} frauds caught</div>
+  </div>
+  <div class="card kpi good">
+    <div class="label">Precision</div>
+    <div class="value num">{{ '%.1f%%'|format(primary.precision * 100) }}</div>
+    <div class="hint">{{ primary.fp }} false alarms flagged</div>
+  </div>
+  <div class="card kpi">
+    <div class="label">Best F1</div>
+    <div class="value num">{{ '%.4f'|format(best.f1) }}</div>
+    <div class="hint">{{ best.name }}</div>
+  </div>
+</div>
+{% else %}
+<div class="alert info">No training report found. Run <code>python -m fraudguard.train</code> to build the models.</div>
+{% endif %}
+
+<section class="section">
+  <h2>Confusion matrix &amp; model leaderboard</h2>
+  <div class="grid split">
+    <div class="card">
+      <h3>XGBoost @ threshold {{ '%.2f'|format(threshold) }}</h3>
+      <figure>
+        <img src="{{ url_for('figure', name='02_confusion_matrix.png') }}"
+             alt="Confusion matrix heatmap for the XGBoost model">
+        <figcaption>
+          Counts are annotated on each cell; the colour scale is row-normalised, so each row
+          shows how the model distributed that true class.
+        </figcaption>
+      </figure>
+    </div>
+    <div class="card">
+      <h3>Every model, each at its own operating threshold</h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Model</th><th>ROC-AUC</th><th>PR-AUC</th><th>Precision</th><th>Recall</th><th>F1</th><th>Thr.</th></tr>
+          </thead>
+          <tbody>
+            {% for m in models %}
+            <tr class="{{ 'best' if m.f1 == best.f1 }}">
+              <td>{{ m.name }}</td>
+              <td class="num">{{ '%.4f'|format(m.roc_auc) }}</td>
+              <td class="num">{{ '%.4f'|format(m.pr_auc) }}</td>
+              <td class="num">{{ '%.3f'|format(m.precision) }}</td>
+              <td class="num">{{ '%.3f'|format(m.recall) }}</td>
+              <td class="num">{{ '%.4f'|format(m.f1) }}</td>
+              <td class="num">{{ '%.2f'|format(m.threshold) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <h2>ROC &amp; Precision-Recall</h2>
+  <p class="lead">At a {{ '%.3f%%'|format(dataset.fraud_rate * 100) }} fraud rate, accuracy and ROC-AUC
+     flatter a model. The PR curve compares against a no-skill baseline of
+     {{ '%.4f'|format(dataset.fraud_rate) }}, which is the comparison that means something.</p>
+  <div class="grid k2">
+    <div class="card"><div class="chart-box"><canvas id="rocChart"></canvas></div></div>
+    <div class="card"><div class="chart-box"><canvas id="prChart"></canvas></div></div>
+  </div>
+</section>
+
+<section class="section">
+  <h2>Interactive threshold lab</h2>
+  <p class="lead">Drag the slider to replay the trade-off on the untouched test fold: how many frauds
+     you catch for each false alarm you accept.</p>
+  <div class="grid split">
+    <div class="card">
+      <h3>Decision threshold</h3>
+      <input type="range" id="thresholdSlider" min="0.01" max="0.99" step="0.01" value="{{ '%.2f'|format(threshold) }}">
+      <p class="mono" id="thresholdValue">{{ '%.2f'|format(threshold) }}</p>
+      <div class="grid k2" id="simStats" style="margin-top:0.9rem">
+        <div class="card kpi"><div class="label">Precision</div><div class="value num" data-k="precision">—</div></div>
+        <div class="card kpi warn"><div class="label">Recall</div><div class="value num" data-k="recall">—</div></div>
+        <div class="card kpi"><div class="label">F1</div><div class="value num" data-k="f1">—</div></div>
+        <div class="card kpi"><div class="label">Alerts raised</div><div class="value num" data-k="alerts">—</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Precision-Recall at this threshold</h3>
+      <div class="chart-box"><canvas id="simChart"></canvas></div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <h2>Anomaly detection &amp; model internals</h2>
+  <div class="grid k2">
+    <div class="card"><figure><img src="{{ url_for('figure', name='10_anomaly_scatter_if.png') }}" alt="Isolation Forest anomaly map"><figcaption>Isolation Forest: each transaction coloured by its anomaly percentile against the training distribution.</figcaption></figure></div>
+    <div class="card"><figure><img src="{{ url_for('figure', name='07_feature_importance.png') }}" alt="XGBoost feature importance"><figcaption>Gain-based importance. V14, V12 and V17 carry the most class-discriminative signal.</figcaption></figure></div>
+  </div>
+</section>
+
+<section class="section">
+  <h2>How to read these numbers</h2>
+  <div class="grid k2">
+    <details open>
+      <summary>Why accuracy is useless here</summary>
+      <p>Flagging nothing scores {{ '%.2f%%'|format((1 - dataset.fraud_rate) * 100) }} accuracy while catching zero
+         frauds. Report <b>recall</b> (frauds you let through) and <b>precision</b> (false alarms that
+         consume analyst time), and compare PR-AUC against the {{ '%.4f'|format(dataset.fraud_rate) }} baseline.</p>
+    </details>
+    <details>
+      <summary>Isolation Forest vs Local Outlier Factor</summary>
+      <p><b>Isolation Forest</b> is global and near-linear — it randomly splits the space and flags
+         points that stay isolated, so it scales to millions of rows. <b>LOF</b> is local: it compares a
+         point's density with its k nearest neighbours, catching dense fraud clusters a global split
+         misses, at roughly O(n log n) cost.</p>
+    </details>
+    <details>
+      <summary>What SMOTE does, and its risk</summary>
+      <p>SMOTE guarantees the model sees the minority class, but it interpolates <i>between</i> real
+         fraud rows. Real fraud is rare and non-compact, so synthetic points can land off the true
+         manifold and create a region the model trusts blindly. XGBoost's <code>scale_pos_weight</code>
+         balances the loss without inventing data — both are reported side by side above.</p>
+    </details>
+    <details>
+      <summary>Choosing the operating threshold</summary>
+      <p>Tune on validation, confirm on test, then re-tune whenever costs or base rates change. A missed
+         fraud usually costs far more than a manual review, so operations typically lower the threshold
+         until review capacity binds. Always log the threshold beside the model version.</p>
+    </details>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+{% endblock %}

@@ -1,1 +1,59 @@
+# ---------------------------------------------------------------------------
+# ElevateLabs_intern — repo-wide ignores
+#
+# Each task-* folder carries its own .gitignore tuned to its contents.
+# This file only covers concerns that span the whole repo.
+# ---------------------------------------------------------------------------
+
+# Virtual environments (see also: venv/ at the bottom of this list)
 venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Packaging
+*.egg-info/
+build/
+dist/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+*.nbconvert.ipynb
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Secrets — never commit credentials
+.env
+.env.*
+!.env.example
+
+# Logs and runtime scratch
+*.log
+*.pid
+
+# Editor / OS temp
+*~
+*.tmp
+*.bak

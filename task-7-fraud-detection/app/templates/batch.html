@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}FraudGuard · Batch screening{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <h1>📦 Batch screening</h1>
+  <p>Score a CSV of transactions in one pass. Supply the 30 model features —
+     <code>Time, V1 … V28, Amount</code> — and get a verdict, risk score and anomaly percentiles per row.</p>
+</section>
+
+<form method="post" enctype="multipart/form-data" class="card">
+  <div class="field">
+    <label for="file">Transaction CSV</label>
+    <input type="file" id="file" name="file" accept=".csv,text/csv" required>
+  </div>
+  <div class="actions">
+    <button type="submit" class="btn">⚡ Screen batch</button>
+    <span class="small muted">Up to 32 MB. Extra columns are ignored; missing ones are reported.</span>
+  </div>
+</form>
+
+{% if error %}<div class="alert error" style="margin-top:1.1rem">{{ error }}</div>{% endif %}
+
+{% if summary %}
+<section class="section">
+  <h2>Batch summary</h2>
+  <div class="grid k5">
+    <div class="card kpi"><div class="label">Rows scored</div><div class="value num">{{ '{:,}'.format(summary.rows) }}</div><div class="hint">submitted batch</div></div>
+    <div class="card kpi {{ 'bad' if summary.flag_rate > 0.02 else 'warn' }}"><div class="label">Flagged fraud</div><div class="value num">{{ '{:,}'.format(summary.flagged) }}</div><div class="hint">{{ '%.2f%%'|format(summary.flag_rate * 100) }} of the batch</div></div>
+    <div class="card kpi"><div class="label">Mean risk</div><div class="value num">{{ '%.2f%%'|format(summary.mean_risk * 100) }}</div><div class="hint">across all rows</div></div>
+    <div class="card kpi"><div class="label">Peak risk</div><div class="value num">{{ '%.2f%%'|format(summary.peak_risk * 100) }}</div><div class="hint">highest scoring row</div></div>
+    <div class="card kpi">
+      <div class="label">Download</div>
+      <div class="value" style="font-size:1rem;padding-top:0.5rem">
+        <a class="btn ghost sm" href="{{ url_for('download', data=summary['_download']) }}">⬇️ Scored CSV</a>
+      </div>
+      <div class="hint">all {{ '{:,}'.format(summary.rows) }} rows</div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <h2>Results <span class="small muted">(first {{ table.shape[0] }} rows)</span></h2>
+  <div class="card flush">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>Time</th><th>Amount</th>
+            <th>Fraud prob.</th><th>Risk</th><th>IF</th><th>LOF</th><th>Verdict</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for _, row in table.iterrows() %}
+          <tr>
+            <td class="num muted">{{ loop.index }}</td>
+            <td class="num">{{ '%.0f'|format(row['Time']) }}</td>
+            <td class="num">{{ '%.2f'|format(row['Amount']) }}</td>
+            <td class="num">{{ '%.2f%%'|format(row['fraud_probability'] * 100) }}</td>
+            <td class="num">{{ '%.2f%%'|format(row['risk_score'] * 100) }}</td>
+            <td class="num">{{ '%.2f'|format(row['anomaly_isolation_forest']) }}</td>
+            <td class="num">{{ '%.2f'|format(row['anomaly_local_outlier_factor'] or 0) }}</td>
+            <td><span class="pill {{ row['verdict'] }}">{{ row['verdict'] }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% else %}
+<section class="section">
+  <h2>API access</h2>
+  <p class="lead">Prefer to script it? The same scorer is exposed as JSON.</p>
+  <div class="grid k2">
+    <div class="card">
+      <h3>Score one transaction</h3>
+      <pre>curl -X POST http://127.0.0.1:5000/api/predict \
+  -H "Content-Type: application/json" \
+  -d '{"Time": 2600, "V14": -1.9, "Amount": 1850, "V1": 0, ...}'</pre>
+    </div>
+    <div class="card">
+      <h3>Score a batch</h3>
+      <pre>curl -X POST http://127.0.0.1:5000/api/batch \
+  -H "Content-Type: application/json" \
+  -d '{"transactions": [{...}, {...}]}'</pre>
+    </div>
+  </div>
+  <p class="small muted" style="margin-top:0.9rem">All 30 features are required;
+     a request missing any of them returns HTTP 400 with the missing list.</p>
+</section>
+{% endif %}
+{% endblock %}

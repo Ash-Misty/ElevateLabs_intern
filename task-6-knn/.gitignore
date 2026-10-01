@@ -1,7 +1,15 @@
+# ---------------------------------------------------------------------------
+# Task 6 — K-Nearest Neighbours (Iris)
+#
+# Tracked on purpose:
+#   dataset/iris.csv   the notebook's input, required to reproduce results
+#   screenshots/*.png  documentation assets for README.md
+#   notebooks/*.ipynb  the deliverable, outputs included
+# ---------------------------------------------------------------------------
+
 # Python
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
 *.pyd
 .Python
 env/
@@ -14,7 +22,13 @@ venv.bak/
 .ipynb_checkpoints/
 *.ipynb_checkpoints
 *.nbconvert.ipynb
+.ipynb.html
+.ipynb.pdf
 
+# Exported / converted artefacts
+*.html
+*.pdf
+dataset/
 # IDEs
 .vscode/
 .idea/
@@ -24,12 +38,17 @@ venv.bak/
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Data
-*.parquet
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Cached neighbour indices and fitted scalers
 *.pkl
 *.joblib
-
-# Screenshots
-screenshots/*.png
-screenshots/*.jpg
+*.parquet
+*.npz
+*.h5
+*.sav
